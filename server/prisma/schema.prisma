@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,6 +5,358 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
+model api_keys {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  key_value  String   @unique(map: "key_value") @db.VarChar(255)
+  created_by BigInt   @db.UnsignedBigInt
+  created_at DateTime @default(now()) @db.DateTime(0)
+  users      users    @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_apikeys_user")
+
+  @@index([created_by], map: "fk_apikeys_user")
+}
+
+model audit_logs {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt?  @db.UnsignedBigInt
+  action     String   @db.VarChar(255)
+  ip_address String?  @db.VarChar(45)
+  user_agent String?  @db.VarChar(255)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  users      users?   @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_audit_user")
+
+  @@index([user_id], map: "fk_audit_user")
+}
+
+model courses {
+  id           BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  slug         String         @unique(map: "slug") @db.VarChar(150)
+  title        String         @db.VarChar(200)
+  description  String?        @db.Text
+  level        courses_level?
+  is_published Boolean        @default(false)
+  created_by   BigInt         @db.UnsignedBigInt
+  created_at   DateTime       @default(now()) @db.DateTime(0)
+  updated_at   DateTime       @default(now()) @db.DateTime(0)
+  users        users          @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_courses_created_by")
+  enrollments  enrollments[]
+  modules      modules[]
+
+  @@index([created_by], map: "fk_courses_created_by")
+}
+
+model enrollments {
+  id              BigInt             @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id         BigInt             @db.UnsignedBigInt
+  course_id       BigInt             @db.UnsignedBigInt
+  source          enrollments_source
+  subscription_id BigInt?            @db.UnsignedBigInt
+  enrolled_at     DateTime           @default(now()) @db.DateTime(0)
+  courses         courses            @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_enrollments_course")
+  subscriptions   subscriptions?     @relation(fields: [subscription_id], references: [id], onUpdate: NoAction, map: "fk_enrollments_subscription")
+  users           users              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_enrollments_user")
+
+  @@unique([user_id, course_id], map: "uq_enrollment")
+  @@index([course_id], map: "fk_enrollments_course")
+  @@index([subscription_id], map: "fk_enrollments_subscription")
+}
+
+model lesson_progress {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id         BigInt    @db.UnsignedBigInt
+  lesson_id       BigInt    @db.UnsignedBigInt
+  last_position_s Int?      @db.UnsignedInt
+  is_completed    Boolean   @default(false)
+  completed_at    DateTime? @db.DateTime(0)
+  updated_at      DateTime  @default(now()) @db.DateTime(0)
+  lessons         lessons   @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_progress_lesson")
+  users           users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_progress_user")
+
+  @@unique([user_id, lesson_id], map: "uq_progress")
+  @@index([lesson_id], map: "fk_progress_lesson")
+}
+
+model lessons {
+  id              BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  module_id       BigInt               @db.UnsignedBigInt
+  title           String               @db.VarChar(200)
+  slug            String               @db.VarChar(200)
+  content_type    lessons_content_type
+  video_url       String?              @db.VarChar(255)
+  resource_url    String?              @db.VarChar(255)
+  duration_sec    Int?                 @db.UnsignedInt
+  is_free_preview Boolean              @default(false)
+  sort_order      Int                  @default(1) @db.UnsignedInt
+  created_at      DateTime             @default(now()) @db.DateTime(0)
+  updated_at      DateTime             @default(now()) @db.DateTime(0)
+  lesson_progress lesson_progress[]
+  modules         modules              @relation(fields: [module_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_lessons_module")
+  quizzes         quizzes[]
+
+  @@index([module_id], map: "fk_lessons_module")
+}
+
+model modules {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  course_id  BigInt    @db.UnsignedBigInt
+  title      String    @db.VarChar(200)
+  sort_order Int       @default(1) @db.UnsignedInt
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @default(now()) @db.DateTime(0)
+  lessons    lessons[]
+  courses    courses   @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_modules_course")
+
+  @@index([course_id], map: "fk_modules_course")
+}
+
+model password_resets {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id    BigInt   @db.UnsignedBigInt
+  token      String   @db.VarChar(255)
+  expires_at DateTime @db.DateTime(0)
+  created_at DateTime @default(now()) @db.DateTime(0)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pwreset_user")
+
+  @@index([user_id], map: "fk_pwreset_user")
+}
+
+model payments {
+  id                  BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id             BigInt          @db.UnsignedBigInt
+  subscription_id     BigInt?         @db.UnsignedBigInt
+  razorpay_order_id   String          @db.VarChar(100)
+  razorpay_payment_id String?         @db.VarChar(100)
+  razorpay_signature  String?         @db.VarChar(255)
+  amount_in_paise     Int             @db.UnsignedInt
+  currency            String          @default("INR") @db.VarChar(10)
+  status              payments_status
+  created_at          DateTime        @default(now()) @db.DateTime(0)
+  updated_at          DateTime        @default(now()) @db.DateTime(0)
+  subscriptions       subscriptions?  @relation(fields: [subscription_id], references: [id], onUpdate: NoAction, map: "fk_payments_subscription")
+  users               users           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payments_user")
+
+  @@index([subscription_id], map: "fk_payments_subscription")
+  @@index([user_id], map: "fk_payments_user")
+}
+
+model plans {
+  id             BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  code           String               @unique(map: "code") @db.VarChar(50)
+  name           String               @db.VarChar(100)
+  description    String?              @db.Text
+  price_in_paise Int                  @db.UnsignedInt
+  billing_period plans_billing_period
+  is_active      Boolean              @default(true)
+  created_at     DateTime             @default(now()) @db.DateTime(0)
+  updated_at     DateTime             @default(now()) @db.DateTime(0)
+  subscriptions  subscriptions[]
+}
+
+model question_options {
+  id           BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  question_id  BigInt         @db.UnsignedBigInt
+  option_text  String         @db.Text
+  is_correct   Boolean        @default(false)
+  sort_order   Int            @default(1) @db.UnsignedInt
+  questions    questions      @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_options_question")
+  quiz_answers quiz_answers[]
+
+  @@index([question_id], map: "fk_options_question")
+}
+
+model questions {
+  id               BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  quiz_id          BigInt                  @db.UnsignedBigInt
+  question_text    String                  @db.Text
+  question_type    questions_question_type
+  marks            Int                     @default(1) @db.UnsignedInt
+  sort_order       Int                     @default(1) @db.UnsignedInt
+  created_at       DateTime                @default(now()) @db.DateTime(0)
+  question_options question_options[]
+  quizzes          quizzes                 @relation(fields: [quiz_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_questions_quiz")
+  quiz_answers     quiz_answers[]
+
+  @@index([quiz_id], map: "fk_questions_quiz")
+}
+
+model quiz_answers {
+  id                 BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  attempt_id         BigInt            @db.UnsignedBigInt
+  question_id        BigInt            @db.UnsignedBigInt
+  selected_option_id BigInt?           @db.UnsignedBigInt
+  answer_text        String?           @db.Text
+  is_correct         Boolean?
+  marks_awarded      Int?
+  quiz_attempts      quiz_attempts     @relation(fields: [attempt_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_answers_attempt")
+  question_options   question_options? @relation(fields: [selected_option_id], references: [id], onUpdate: NoAction, map: "fk_answers_option")
+  questions          questions         @relation(fields: [question_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_answers_question")
+
+  @@index([attempt_id], map: "fk_answers_attempt")
+  @@index([selected_option_id], map: "fk_answers_option")
+  @@index([question_id], map: "fk_answers_question")
+}
+
+model quiz_attempts {
+  id           BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id      BigInt               @db.UnsignedBigInt
+  quiz_id      BigInt               @db.UnsignedBigInt
+  started_at   DateTime             @default(now()) @db.DateTime(0)
+  submitted_at DateTime?            @db.DateTime(0)
+  score        Int?
+  status       quiz_attempts_status @default(in_progress)
+  quiz_answers quiz_answers[]
+  quizzes      quizzes              @relation(fields: [quiz_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_attempts_quiz")
+  users        users                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_attempts_user")
+
+  @@index([quiz_id], map: "fk_attempts_quiz")
+  @@index([user_id], map: "fk_attempts_user")
+}
+
+model quizzes {
+  id            BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  lesson_id     BigInt          @db.UnsignedBigInt
+  title         String          @db.VarChar(200)
+  total_marks   Int             @db.UnsignedInt
+  created_at    DateTime        @default(now()) @db.DateTime(0)
+  updated_at    DateTime        @default(now()) @db.DateTime(0)
+  questions     questions[]
+  quiz_attempts quiz_attempts[]
+  lessons       lessons         @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_quizzes_lesson")
+
+  @@index([lesson_id], map: "fk_quizzes_lesson")
+}
+
+model roles {
+  id          Int          @id @default(autoincrement()) @db.UnsignedTinyInt
+  name        String       @unique(map: "name") @db.VarChar(50)
+  description String?      @db.VarChar(255)
+  user_roles  user_roles[]
+}
+
+model sessions {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id       BigInt   @db.UnsignedBigInt
+  refresh_token String   @db.VarChar(255)
+  user_agent    String?  @db.VarChar(255)
+  ip_address    String?  @db.VarChar(45)
+  expires_at    DateTime @db.DateTime(0)
+  created_at    DateTime @default(now()) @db.DateTime(0)
+  users         users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sessions_user")
+
+  @@index([user_id], map: "fk_sessions_user")
+}
+
+model subscriptions {
+  id              BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id         BigInt               @db.UnsignedBigInt
+  plan_id         BigInt               @db.UnsignedBigInt
+  status          subscriptions_status @default(pending)
+  starts_at       DateTime             @db.DateTime(0)
+  ends_at         DateTime             @db.DateTime(0)
+  razorpay_sub_id String?              @db.VarChar(100)
+  created_at      DateTime             @default(now()) @db.DateTime(0)
+  updated_at      DateTime             @default(now()) @db.DateTime(0)
+  enrollments     enrollments[]
+  payments        payments[]
+  plans           plans                @relation(fields: [plan_id], references: [id], onUpdate: NoAction, map: "fk_subscriptions_plan")
+  users           users                @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_subscriptions_user")
+
+  @@index([plan_id], map: "fk_subscriptions_plan")
+  @@index([user_id], map: "fk_subscriptions_user")
+}
+
+model user_roles {
+  user_id BigInt @db.UnsignedBigInt
+  role_id Int    @db.UnsignedTinyInt
+  roles   roles  @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_roles_role")
+  users   users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_roles_user")
+
+  @@id([user_id, role_id])
+  @@index([role_id], map: "fk_user_roles_role")
+}
+
+model users {
+  id              BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid            String            @unique(map: "uuid") @db.Char(36)
+  full_name       String            @db.VarChar(150)
+  email           String            @unique(map: "email") @db.VarChar(190)
+  phone           String?           @db.VarChar(20)
+  password_hash   String            @db.VarChar(255)
+  status          users_status?     @default(active)
+  created_at      DateTime          @default(now()) @db.DateTime(0)
+  updated_at      DateTime          @default(now()) @db.DateTime(0)
+  api_keys        api_keys[]
+  audit_logs      audit_logs[]
+  courses         courses[]
+  enrollments     enrollments[]
+  lesson_progress lesson_progress[]
+  password_resets password_resets[]
+  payments        payments[]
+  quiz_attempts   quiz_attempts[]
+  sessions        sessions[]
+  subscriptions   subscriptions[]
+  user_roles      user_roles[]
+}
+
+enum enrollments_source {
+  subscription
+  manual
+  promo
+}
+
+enum questions_question_type {
+  mcq_single
+  mcq_multi
+  integer
+  subjective
+}
+
+enum subscriptions_status {
+  active
+  expired
+  cancelled
+  pending
+}
+
+enum courses_level {
+  foundation
+  // 11 @map("11")
+  // 12 @map("12")
+  dropper
+  mixed
+}
+
+enum lessons_content_type {
+  video
+  pdf
+  quiz
+  live_class
+}
+
+enum plans_billing_period {
+  monthly
+  quarterly
+  yearly
+  lifetime
+}
+
+enum quiz_attempts_status {
+  in_progress
+  submitted
+  evaluated
+}
+
+enum users_status {
+  active
+  inactive
+  banned
+}
+
+enum payments_status {
+  created
+  authorized
+  captured
+  failed
+  refunded
+}
