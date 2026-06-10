@@ -1,5 +1,6 @@
-import "dotenv/config";
-export default {
+require("dotenv/config");
+
+module.exports = {
   schema: "prisma/schema.prisma",
   datasource: {
     provider: "mysql",
